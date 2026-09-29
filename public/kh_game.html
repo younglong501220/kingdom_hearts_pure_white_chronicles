@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>王國之心：純白編年史 (Kingdom Hearts: Pure White Chronicles)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #0b0f19;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 900px;
+            height: 580px;
+            background: #111;
+            border: 3px solid #e2b744;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(226, 183, 68, 0.4), inset 0 0 20px #000;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .hud-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .player-status {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .avatar-frame {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            border: 3px solid #e2b744;
+            background: radial-gradient(circle, #2b4570 0%, #0c1626 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 10px #e2b744;
+            font-size: 28px;
+        }
+        .bars {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .bar-wrap {
+            position: relative;
+            width: 180px;
+            height: 14px;
+            background: #222;
+            border-radius: 7px;
+            border: 1px solid #555;
+            overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.15s ease-out;
+        }
+        .hp-fill { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+        .mp-fill { background: linear-gradient(90deg, #2980b9, #3498db); }
+        .purity-fill { background: linear-gradient(90deg, #f39c12, #fff275); }
+        .bar-text {
+            position: absolute;
+            right: 6px;
+            top: -2px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 2px #000;
+        }
+
+        .boss-status {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            width: 260px;
+            display: none;
+        }
+        .boss-name {
+            font-size: 13px;
+            font-weight: bold;
+            color: #ff7675;
+            text-shadow: 0 0 5px #d63031;
+            margin-bottom: 3px;
+            text-align: right;
+        }
+        .boss-bar-wrap {
+            width: 100%;
+            height: 14px;
+            background: #222;
+            border-radius: 7px;
+            border: 1px solid #d63031;
+            overflow: hidden;
+        }
+        .boss-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #c0392b, #e74c3c);
+            transition: width 0.1s ease;
+        }
+
+        .deck-container {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+        }
+        .medal-btn {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #1e272e, #2d3436);
+            border: 2px solid #e2b744;
+            border-radius: 12px;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+            transition: transform 0.1s, border-color 0.2s, box-shadow 0.2s;
+        }
+        .medal-btn:hover:not(:disabled) {
+            transform: translateY(-4px) scale(1.05);
+            border-color: #ffeaa7;
+            box-shadow: 0 6px 15px rgba(226, 183, 68, 0.6);
+        }
+        .medal-btn:active:not(:disabled) {
+            transform: translateY(2px) scale(0.95);
+        }
+        .medal-btn:disabled {
+            filter: grayscale(0.8) opacity(0.5);
+            cursor: not-allowed;
+        }
+        .medal-icon { font-size: 24px; margin-bottom: 2px; }
+        .medal-name { font-size: 10px; font-weight: bold; text-align: center; }
+        .medal-cost { font-size: 9px; color: #74b9ff; margin-top: 1px; }
+        .cooldown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .ultimate-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #f39c12 0%, #d35400 100%);
+            border: 3px solid #fff;
+            color: #fff;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 0 15px #f1c40f;
+            pointer-events: auto;
+            transition: transform 0.2s;
+            animation: pulse 1.5s infinite alternate;
+            display: none;
+        }
+        .ultimate-btn:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px #f1c40f; }
+            100% { box-shadow: 0 0 25px #ffeaa7, 0 0 40px #f39c12; }
+        }
+
+        .screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(8, 12, 22, 0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .screen-overlay h1 {
+            font-size: 32px;
+            color: #f1c40f;
+            text-shadow: 0 0 15px rgba(241, 196, 15, 0.6);
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
+        .screen-overlay p {
+            font-size: 14px;
+            max-width: 580px;
+            text-align: center;
+            color: #dfe6e9;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .start-btn {
+            padding: 12px 36px;
+            background: linear-gradient(135deg, #e2b744, #d35400);
+            border: 2px solid #fff;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(226, 183, 68, 0.6);
+            transition: all 0.2s;
+        }
+        .start-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 25px rgba(241, 196, 15, 0.9);
+        }
+        .instructions {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #a4b0be;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="900" height="580"></canvas>
+
+        <div class="hud-layer">
+            <div class="player-status">
+                <div class="avatar-frame">🗝️</div>
+                <div class="bars">
+                    <div class="bar-wrap">
+                        <div id="hp-bar" class="bar-fill hp-fill"></div>
+                        <div id="hp-text" class="bar-text">HP 100/100</div>
+                    </div>
+                    <div class="bar-wrap">
+                        <div id="mp-bar" class="bar-fill mp-fill"></div>
+                        <div id="mp-text" class="bar-text">MP 60/60</div>
+                    </div>
+                    <div class="bar-wrap">
+                        <div id="purity-bar" class="bar-fill purity-fill" style="width: 0%;"></div>
+                        <div id="purity-text" class="bar-text">純潔之光 0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="boss-ui" class="boss-status">
+                <div id="boss-title" class="boss-name">邪惡皇后 & 魔鏡</div>
+                <div class="boss-bar-wrap">
+                    <div id="boss-hp" class="boss-fill"></div>
+                </div>
+            </div>
+
+            <div class="deck-container">
+                <button class="medal-btn" id="btn-doc" onclick="useSkill('doc')">
+                    <div class="medal-icon">👓</div>
+                    <div class="medal-name">萬事通重擊</div>
+                    <div class="medal-cost">MP 15</div>
+                    <div class="cooldown-overlay" id="cd-doc">0</div>
+                </button>
+                <button class="medal-btn" id="btn-grumpy" onclick="useSkill('grumpy')">
+                    <div class="medal-icon">⛏️</div>
+                    <div class="medal-name">生氣鬼破甲</div>
+                    <div class="medal-cost">MP 20</div>
+                    <div class="cooldown-overlay" id="cd-grumpy">0</div>
+                </button>
+                <button class="medal-btn" id="btn-snow" onclick="useSkill('snow')">
+                    <div class="medal-icon">🍎</div>
+                    <div class="medal-name">純白祈願</div>
+                    <div class="medal-cost">MP 25</div>
+                    <div class="cooldown-overlay" id="cd-snow">0</div>
+                </button>
+                <button class="medal-btn" id="btn-blizzard" onclick="useSkill('blizzard')">
+                    <div class="medal-icon">❄️</div>
+                    <div class="medal-name">暴風雪魔法</div>
+                    <div class="medal-cost">MP 30</div>
+                    <div class="cooldown-overlay" id="cd-blizzard">0</div>
+                </button>
+            </div>
+
+            <div id="btn-ultimate" class="ultimate-btn" onclick="triggerUltimate()">
+                <span style="font-size:24px;">✨</span>
+                <span style="font-size:11px;">純白之光</span>
+            </div>
+        </div>
+
+        <div id="overlay-screen" class="screen-overlay">
+            <h1 id="overlay-title">王國之心：純白編年史</h1>
+            <p id="overlay-msg">
+                邪惡皇后利用黑魔法煉製暗影毒蘋果，企圖吞噬「純潔之心七公主」之一的白雪公主！<br>
+                拿起鑰刃，與七個小矮人守護森林的純潔之光，擊破皇后的魔鏡幻術！
+            </p>
+            <button class="start-btn" id="start-btn" onclick="startGame()">踏上光之冒險</button>
+            <div class="instructions">
+                🎮 操作：滑鼠左鍵點擊敵人攻擊 | 按下方卡牌施放技能 | 純潔之光全滿可釋放大招
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function playSound(type) {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'hit') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'magic') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.25);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'heal') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.linearRampToValueAtTime(800, now + 0.3);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.35);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } else if (type === 'ultimate') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(1600, now + 0.8);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.8);
+                osc.start(now);
+                osc.stop(now + 0.8);
+            }
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameState = 'MENU';
+        let currentWave = 1;
+        const totalWaves = 3;
+
+        const player = {
+            hp: 100,
+            maxHp: 100,
+            mp: 60,
+            maxMp: 60,
+            purity: 0,
+            maxPurity: 100,
+            atk: 14
+        };
+
+        const cooldowns = {
+            doc: 0,
+            grumpy: 0,
+            snow: 0,
+            blizzard: 0
+        };
+
+        let enemies = [];
+        let particles = [];
+        let damageTexts = [];
+        let screenFlash = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameState !== 'PLAYING') return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            let hit = false;
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const en = enemies[i];
+                const dist = Math.hypot(mouseX - en.x, mouseY - en.y);
+                if (dist < en.radius + 15) {
+                    damageEnemy(en, player.atk, false);
+                    createSlashes(en.x, en.y, '#ffeaa7');
+                    playSound('hit');
+                    hit = true;
+                    gainPurity(4);
+                    break;
+                }
+            }
+
+            if (!hit) {
+                createSlashes(mouseX, mouseY, '#74b9ff');
+                playSound('hit');
+            }
+        });
+
+        function setupWave(wave) {
+            enemies = [];
+            document.getElementById('boss-ui').style.display = 'none';
+
+            if (wave === 1) {
+                for (let i = 0; i < 4; i++) {
+                    enemies.push(createEnemy('shadow', 450 + i * 90, 260 + (i % 2) * 80, 50, 6, 25));
+                }
+            } else if (wave === 2) {
+                enemies.push(createEnemy('apple_heartless', 480, 200, 110, 10, 32));
+                enemies.push(createEnemy('shadow', 580, 340, 65, 8, 25));
+                enemies.push(createEnemy('apple_heartless', 700, 220, 110, 10, 32));
+            } else if (wave === 3) {
+                document.getElementById('boss-ui').style.display = 'block';
+                enemies.push(createEnemy('boss_queen', 620, 260, 480, 16, 55));
+            }
+        }
+
+        function createEnemy(type, x, y, hp, atk, radius) {
+            return {
+                type: type,
+                x: x,
+                y: y,
+                hp: hp,
+                maxHp: hp,
+                atk: atk,
+                radius: radius,
+                attackTimer: Math.random() * 90 + 60,
+                isAttacking: false,
+                floatOffset: Math.random() * Math.PI
+            };
+        }
+
+        function useSkill(type) {
+            if (gameState !== 'PLAYING') return;
+            if (cooldowns[type] > 0) return;
+
+            if (type === 'doc') {
+                if (player.mp < 15) return;
+                player.mp -= 15;
+                cooldowns.doc = 240;
+                enemies.forEach(en => damageEnemy(en, 28, true));
+                createExplosion(canvas.width / 2 + 100, canvas.height / 2, '#f1c40f', 30);
+                playSound('magic');
+                gainPurity(10);
+            } else if (type === 'grumpy') {
+                if (player.mp < 20) return;
+                player.mp -= 20;
+                cooldowns.grumpy = 300;
+                if (enemies.length > 0) {
+                    const target = enemies[0];
+                    damageEnemy(target, 70, true);
+                    createExplosion(target.x, target.y, '#e67e22', 40);
+                }
+                playSound('hit');
+                gainPurity(12);
+            } else if (type === 'snow') {
+                if (player.mp < 25) return;
+                player.mp -= 25;
+                cooldowns.snow = 360;
+                player.hp = Math.min(player.maxHp, player.hp + 45);
+                addDamageText(180, 260, "+45 HP", "#2ecc71");
+                createHealRing(180, 280);
+                playSound('heal');
+                gainPurity(25);
+            } else if (type === 'blizzard') {
+                if (player.mp < 30) return;
+                player.mp -= 30;
+                cooldowns.blizzard = 400;
+                enemies.forEach(en => {
+                    damageEnemy(en, 38, true);
+                    en.attackTimer += 120;
+                });
+                createExplosion(canvas.width / 2 + 120, canvas.height / 2, '#74b9ff', 50);
+                playSound('magic');
+                gainPurity(15);
+            }
+            updateHUD();
+        }
+
+        function triggerUltimate() {
+            if (player.purity < 100 || gameState !== 'PLAYING') return;
+            player.purity = 0;
+            screenFlash = 25;
+            playSound('ultimate');
+
+            enemies.forEach(en => {
+                damageEnemy(en, 220, true);
+            });
+
+            for (let i = 0; i < 80; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 16,
+                    vy: (Math.random() - 0.5) * 16,
+                    color: '#fff275',
+                    radius: Math.random() * 5 + 3,
+                    life: 50
+                });
+            }
+            document.getElementById('btn-ultimate').style.display = 'none';
+            updateHUD();
+        }
+
+        function gainPurity(amt) {
+            player.purity = Math.min(player.maxPurity, player.purity + amt);
+            if (player.purity >= 100) {
+                document.getElementById('btn-ultimate').style.display = 'flex';
+            }
+            updateHUD();
+        }
+
+        function damageEnemy(en, amt, isCrit) {
+            en.hp -= amt;
+            addDamageText(en.x + (Math.random() - 0.5) * 20, en.y - 20, amt, isCrit ? '#f1c40f' : '#ffffff');
+            if (en.hp <= 0) {
+                createExplosion(en.x, en.y, '#9b59b6', 25);
+            }
+        }
+
+        function addDamageText(x, y, text, color) {
+            damageTexts.push({ x, y, text, color, life: 35, vy: -1.5 });
+        }
+
+        function createSlashes(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 9,
+                    vy: (Math.random() - 0.5) * 9,
+                    color: color,
+                    radius: Math.random() * 3 + 2,
+                    life: 20
+                });
+            }
+        }
+
+        function createExplosion(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12,
+                    color: color,
+                    radius: Math.random() * 4 + 2,
+                    life: 30
+                });
+            }
+        }
+
+        function createHealRing(x, y) {
+            for (let i = 0; i < 20; i++) {
+                const angle = (i / 20) * Math.PI * 2;
+                particles.push({
+                    x: x + Math.cos(angle) * 30,
+                    y: y + Math.sin(angle) * 30,
+                    vx: Math.cos(angle) * 2,
+                    vy: -2,
+                    color: '#2ecc71',
+                    radius: 3,
+                    life: 30
+                });
+            }
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            if (player.mp < player.maxMp) {
+                player.mp = Math.min(player.maxMp, player.mp + 0.05);
+                updateHUD();
+            }
+
+            for (let key in cooldowns) {
+                if (cooldowns[key] > 0) {
+                    cooldowns[key]--;
+                    const cdSec = Math.ceil(cooldowns[key] / 60);
+                    const cdOverlay = document.getElementById(`cd-${key}`);
+                    if (cdOverlay) {
+                        cdOverlay.style.display = 'flex';
+                        cdOverlay.innerText = cdSec;
+                    }
+                } else {
+                    const cdOverlay = document.getElementById(`cd-${key}`);
+                    if (cdOverlay) cdOverlay.style.display = 'none';
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const en = enemies[i];
+                en.floatOffset += 0.05;
+
+                if (en.hp <= 0) {
+                    enemies.splice(i, 1);
+                    continue;
+                }
+
+                en.attackTimer--;
+                if (en.attackTimer <= 0) {
+                    player.hp -= en.atk;
+                    screenFlash = 8;
+                    playSound('hit');
+                    addDamageText(180, 260, `-${en.atk}`, '#e74c3c');
+                    en.attackTimer = Math.random() * 120 + 80;
+                    updateHUD();
+
+                    if (player.hp <= 0) {
+                        endGame(false);
+                    }
+                }
+            }
+
+            if (enemies.length === 0) {
+                if (currentWave < totalWaves) {
+                    currentWave++;
+                    setupWave(currentWave);
+                } else {
+                    endGame(true);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = damageTexts.length - 1; i >= 0; i--) {
+                const dt = damageTexts[i];
+                dt.y += dt.vy;
+                dt.life--;
+                if (dt.life <= 0) damageTexts.splice(i, 1);
+            }
+
+            if (screenFlash > 0) screenFlash--;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#0a192f');
+            grad.addColorStop(0.6, '#132c33');
+            grad.addColorStop(1, '#1e3d36');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "rgba(10, 25, 20, 0.6)";
+            for (let i = 0; i < 7; i++) {
+                ctx.beginPath();
+                ctx.arc(i * 150 + 60, 480, 110, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = "#182c25";
+            ctx.fillRect(0, 430, canvas.width, 150);
+
+            drawPlayerAndSnowWhite(180, 340);
+
+            enemies.forEach(en => {
+                drawEnemy(en);
+            });
+
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            damageTexts.forEach(dt => {
+                ctx.font = "bold 16px 'Segoe UI'";
+                ctx.fillStyle = dt.color;
+                ctx.shadowColor = "#000";
+                ctx.shadowBlur = 4;
+                ctx.fillText(dt.text, dt.x, dt.y);
+                ctx.shadowBlur = 0;
+            });
+
+            if (screenFlash > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${screenFlash / 30})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            ctx.font = "bold 14px 'Segoe UI'";
+            ctx.fillStyle = "#f1c40f";
+            ctx.fillText(`Wave ${currentWave} / ${totalWaves}`, canvas.width / 2 - 40, 30);
+        }
+
+        function drawPlayerAndSnowWhite(x, y) {
+            ctx.fillStyle = "rgba(241, 196, 15, 0.2)";
+            ctx.beginPath();
+            ctx.ellipse(x, y + 60, 60, 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.font = "46px 'Segoe UI'";
+            ctx.fillText("🧙‍♂️", x - 40, y + 40);
+
+            ctx.shadowColor = "#ffeaa7";
+            ctx.shadowBlur = 15;
+            ctx.fillText("👸", x + 10, y + 30);
+            ctx.shadowBlur = 0;
+
+            ctx.save();
+            ctx.translate(x + 20, y - 20);
+            ctx.font = "32px 'Segoe UI'";
+            ctx.fillText("🗝️", 0, 0);
+            ctx.restore();
+        }
+
+        function drawEnemy(en) {
+            const floatY = en.y + Math.sin(en.floatOffset) * 6;
+
+            if (en.attackTimer < 30) {
+                ctx.strokeStyle = `rgba(231, 76, 60, ${1 - en.attackTimer / 30})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(en.x, floatY, en.radius + 12, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            if (en.type === 'shadow') {
+                ctx.font = "36px 'Segoe UI'";
+                ctx.shadowColor = "#8e44ad";
+                ctx.shadowBlur = 12;
+                ctx.fillText("👾", en.x - 18, floatY + 12);
+                ctx.shadowBlur = 0;
+            } else if (en.type === 'apple_heartless') {
+                ctx.font = "46px 'Segoe UI'";
+                ctx.shadowColor = "#e74c3c";
+                ctx.shadowBlur = 15;
+                ctx.fillText("🍎", en.x - 22, floatY + 16);
+                ctx.shadowBlur = 0;
+            } else if (en.type === 'boss_queen') {
+                ctx.font = "60px 'Segoe UI'";
+                ctx.shadowColor = "#9b59b6";
+                ctx.shadowBlur = 20;
+                ctx.fillText("🪞", en.x - 55, floatY + 20);
+                ctx.fillText("🦹‍♀️", en.x + 5, floatY + 20);
+                ctx.shadowBlur = 0;
+            }
+
+            if (en.type !== 'boss_queen') {
+                const barW = 40;
+                ctx.fillStyle = "rgba(0,0,0,0.6)";
+                ctx.fillRect(en.x - barW / 2, floatY - en.radius - 12, barW, 6);
+                ctx.fillStyle = "#e74c3c";
+                ctx.fillRect(en.x - barW / 2, floatY - en.radius - 12, (en.hp / en.maxHp) * barW, 6);
+            } else {
+                const bossFill = document.getElementById('boss-hp');
+                if (bossFill) {
+                    bossFill.style.width = `${Math.max(0, (en.hp / en.maxHp) * 100)}%`;
+                }
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('hp-bar').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+            document.getElementById('hp-text').innerText = `HP ${Math.ceil(player.hp)}/${player.maxHp}`;
+
+            document.getElementById('mp-bar').style.width = `${Math.max(0, (player.mp / player.maxMp) * 100)}%`;
+            document.getElementById('mp-text').innerText = `MP ${Math.floor(player.mp)}/${player.maxMp}`;
+
+            document.getElementById('purity-bar').style.width = `${player.purity}%`;
+            document.getElementById('purity-text').innerText = `純潔之光 ${Math.floor(player.purity)}%`;
+        }
+
+        function startGame() {
+            document.getElementById('overlay-screen').style.display = 'none';
+            gameState = 'PLAYING';
+            currentWave = 1;
+            player.hp = player.maxHp;
+            player.mp = player.maxMp;
+            player.purity = 0;
+            document.getElementById('btn-ultimate').style.display = 'none';
+            setupWave(currentWave);
+            updateHUD();
+        }
+
+        function endGame(isWin) {
+            gameState = isWin ? 'WIN' : 'GAMEOVER';
+            const overlay = document.getElementById('overlay-screen');
+            const title = document.getElementById('overlay-title');
+            const msg = document.getElementById('overlay-msg');
+            const btn = document.getElementById('start-btn');
+
+            overlay.style.display = 'flex';
+            if (isWin) {
+                title.innerText = "✨ 林地淨化成功！世界重獲光明 ✨";
+                msg.innerHTML = "你成功擊敗了邪惡皇后的魔鏡幻影，驅散了覆蓋在森林上的黑魔法！<br>白雪公主的純潔之心綻放出永恆的光輝，獲得了鑰刃<b>【林地之誓】</b>！";
+                btn.innerText = "再次展開冒險";
+            } else {
+                title.innerText = "💔 心被黑暗吞噬...";
+                msg.innerHTML = "純潔的光芒被皇后的黑魔法籠罩...不要放棄心之光芒！";
+                btn.innerText = "重新挑戰";
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

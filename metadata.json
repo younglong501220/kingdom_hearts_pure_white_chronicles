@@ -1,0 +1,6 @@
+{
+  "name": "王國之心：純白編年史 (Kingdom Hearts: Pure White Chronicles)",
+  "description": "以白雪公主童話林地與純潔之心為主題的王國之心動作RPG網頁遊戲，揮舞鑰刃驅散黑魔法與魔鏡幻影。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
